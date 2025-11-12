@@ -419,3 +419,72 @@ If port 8000 is already in use, map to a different port:
 docker run -d -p 9000:8000 --name seleniumbase-api seleniumbase-api
 curl -X GET "http://localhost:9000/api/article?url=https://example.com"
 ```
+
+## Testing
+
+The project includes comprehensive test coverage for the API server, covering both unit tests for helper functions and integration tests for endpoints.
+
+### Test Structure
+
+- **api/tests/test_helpers.py** - Unit tests for helper functions (cache operations, parameter parsing, HTML extraction)
+- **api/tests/test_endpoints.py** - Integration tests for API endpoints (/health, /, /api/article)
+
+### Running Tests
+
+Tests are designed to run inside the Docker container where all dependencies are available.
+
+#### Run All Tests
+
+```bash
+# Start a container with bash access
+docker run -it -p 8000:8000 --name seleniumbase-api-test seleniumbase-api bash
+
+# Inside the container, navigate to the API directory
+cd /SeleniumBase/api
+
+# Run all tests
+python3 -m unittest discover tests -v
+```
+
+#### Run Specific Test Files
+
+```bash
+# Inside the container
+cd /SeleniumBase/api
+
+# Run only helper function tests
+python3 -m unittest tests.test_helpers -v
+
+# Run only endpoint tests
+python3 -m unittest tests.test_endpoints -v
+```
+
+#### Run Specific Test Classes
+
+```bash
+# Run only cache function tests
+python3 -m unittest tests.test_helpers.TestCacheFunctions -v
+
+# Run only /health endpoint tests
+python3 -m unittest tests.test_endpoints.TestHealthEndpoint -v
+```
+
+### Test Coverage Summary
+
+**Unit Tests (test_helpers.py):**
+- Cache operations: key generation, save/load, expiration, corruption handling
+- Parameter parsing: boolean, integer, and list parameters
+- HTML extraction: meta tags, article content, text content, published time
+
+**Integration Tests (test_endpoints.py):**
+- `/health` endpoint: status checks, JSON response format
+- `/` (root) endpoint: API documentation, service information
+- `/api/article` endpoint:
+  - URL parameter validation
+  - All response fields (id, url, domain, title, byline, excerpt, etc.)
+  - Parameter handling (full-content, screenshot, viewport, timeout, sleep, scroll, user-scripts, incognito)
+  - Caching functionality (save, retrieve, TTL)
+  - Screenshot generation
+  - Error handling and format
+
+For detailed testing documentation, see [api/tests/README.md](api/tests/README.md).

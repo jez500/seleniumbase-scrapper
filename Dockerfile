@@ -106,7 +106,7 @@ RUN wget https://github.com/seleniumbase/SeleniumBase/archive/refs/tags/${SELENI
     pip install --upgrade pip setuptools wheel && \
     cd /tmp/SeleniumBase && pip install -r requirements.txt --upgrade && \
     cd /tmp/SeleniumBase && pip install . && \
-    pip install pyautogui flask beautifulsoup4 && \
+    pip install pyautogui flask beautifulsoup4 pytest pytest-mock && \
     # Copy entrypoint scripts from downloaded repo
     cp /tmp/SeleniumBase/integrations/docker/docker-entrypoint.sh / && \
     cp /tmp/SeleniumBase/integrations/docker/run_docker_test_in_chrome.sh / && \
@@ -125,15 +125,19 @@ RUN seleniumbase get chromedriver --path
 # Copy API files and create directories
 #=======================================
 COPY api /SeleniumBase/api/
+COPY scripts /SeleniumBase/scripts
 RUN mkdir -p /SeleniumBase/api/cache
 RUN mkdir -p /SeleniumBase/api/screenshots
 RUN mkdir -p /SeleniumBase/api/user_scripts
 RUN chmod -R 755 /SeleniumBase/api
+WORKDIR /SeleniumBase
 
 #============================
 # Expose API port
 #============================
 EXPOSE 8000
+
+
 
 ENTRYPOINT ["/docker-entrypoint-api.sh"]
 CMD ["/bin/bash"]

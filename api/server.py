@@ -292,8 +292,8 @@ def get_article():
         extra_http_headers = request.args.get('extra-http-headers', DEFAULT_EXTRA_HTTP_HEADERS)
         
         # Build query object for cache key
+        # Note: 'cache' parameter is excluded because it doesn't affect content
         query_params = {
-            'cache': use_cache,
             'full-content': full_content,
             'screenshot': screenshot,
             'user-scripts': user_scripts,
