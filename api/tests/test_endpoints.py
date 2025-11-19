@@ -128,11 +128,6 @@ class TestArticleEndpointBasics(unittest.TestCase):
         shutil.rmtree(self.temp_cache_dir, ignore_errors=True)
         shutil.rmtree(self.temp_screenshots_dir, ignore_errors=True)
         shutil.rmtree(self.temp_user_scripts_dir, ignore_errors=True)
-        
-        # Restore original directories
-        server.CACHE_DIR = self.original_cache_dir
-        server.SCREENSHOTS_DIR = self.original_screenshots_dir
-        server.USER_SCRIPTS_DIR = self.original_user_scripts_dir
     
     def test_article_endpoint_requires_url(self):
         """Test that /api/article returns error without URL parameter"""
@@ -153,7 +148,7 @@ class TestArticleEndpointBasics(unittest.TestCase):
         self.assertIn('type', data['detail'][0])
         self.assertIn('msg', data['detail'][0])
     
-    @patch('server.Driver')
+    @patch('endpoints.article.Driver')
     def test_article_endpoint_with_url(self, mock_driver_class):
         """Test that /api/article works with URL parameter"""
         # Mock the Driver
@@ -173,7 +168,7 @@ class TestArticleEndpointBasics(unittest.TestCase):
         self.assertIn('title', data)
         self.assertIn('content', data)
     
-    @patch('server.Driver')
+    @patch('endpoints.article.Driver')
     def test_article_endpoint_returns_all_required_fields(self, mock_driver_class):
         """Test that /api/article returns all required fields"""
         mock_driver = MagicMock()
@@ -209,7 +204,7 @@ class TestArticleEndpointBasics(unittest.TestCase):
         for field in required_fields:
             self.assertIn(field, data, f"Missing required field: {field}")
     
-    @patch('server.Driver')
+    @patch('endpoints.article.Driver')
     def test_article_endpoint_driver_called_correctly(self, mock_driver_class):
         """Test that Driver is instantiated with correct parameters"""
         mock_driver = MagicMock()
@@ -227,7 +222,7 @@ class TestArticleEndpointBasics(unittest.TestCase):
         self.assertTrue(call_kwargs['headless'])
         self.assertTrue(call_kwargs['uc'])
     
-    @patch('server.Driver')
+    @patch('endpoints.article.Driver')
     def test_article_endpoint_driver_quit_called(self, mock_driver_class):
         """Test that Driver.quit() is always called"""
         mock_driver = MagicMock()
@@ -240,7 +235,7 @@ class TestArticleEndpointBasics(unittest.TestCase):
         # Verify quit was called
         mock_driver.quit.assert_called_once()
     
-    @patch('server.Driver')
+    @patch('endpoints.article.Driver')
     def test_article_endpoint_handles_driver_exception(self, mock_driver_class):
         """Test that endpoint handles exceptions from Driver"""
         mock_driver = MagicMock()
@@ -260,32 +255,38 @@ class TestArticleEndpointParameters(unittest.TestCase):
     
     def setUp(self):
         """Set up test client and temp directories"""
-        server.app.config['TESTING'] = True
-        self.client = server.app.test_client()
+        from endpoints import article, health, root
+        from flask import Flask
+        
+        self.app = Flask(__name__)
+        self.app.config['TESTING'] = True
+        self.client = self.app.test_client()
         
         self.temp_cache_dir = tempfile.mkdtemp()
         self.temp_screenshots_dir = tempfile.mkdtemp()
         self.temp_user_scripts_dir = tempfile.mkdtemp()
         
-        self.original_cache_dir = server.CACHE_DIR
-        self.original_screenshots_dir = server.SCREENSHOTS_DIR
-        self.original_user_scripts_dir = server.USER_SCRIPTS_DIR
-        
-        server.CACHE_DIR = Path(self.temp_cache_dir)
-        server.SCREENSHOTS_DIR = Path(self.temp_screenshots_dir)
-        server.USER_SCRIPTS_DIR = Path(self.temp_user_scripts_dir)
+        health.register_routes(self.app)
+        root.register_routes(self.app)
+        article.register_routes(
+            self.app, Path(self.temp_cache_dir), Path(self.temp_user_scripts_dir), Path(self.temp_screenshots_dir),
+            server.DEFAULT_CACHE, server.DEFAULT_FULL_CONTENT, server.DEFAULT_SCREENSHOT,
+            server.DEFAULT_USER_SCRIPTS, server.DEFAULT_USER_SCRIPTS_TIMEOUT, server.DEFAULT_INCOGNITO,
+            server.DEFAULT_TIMEOUT, server.DEFAULT_WAIT_UNTIL, server.DEFAULT_SLEEP, server.DEFAULT_RESOURCE,
+            server.DEFAULT_VIEWPORT_WIDTH, server.DEFAULT_VIEWPORT_HEIGHT, server.DEFAULT_SCREEN_WIDTH,
+            server.DEFAULT_SCREEN_HEIGHT, server.DEFAULT_DEVICE, server.DEFAULT_SCROLL_DOWN,
+            server.DEFAULT_IGNORE_HTTPS_ERRORS, server.DEFAULT_USER_AGENT, server.DEFAULT_LOCALE,
+            server.DEFAULT_TIMEZONE, server.DEFAULT_HTTP_CREDENTIALS, server.DEFAULT_EXTRA_HTTP_HEADERS,
+            server.DEFAULT_CACHE_TTL
+        )
     
     def tearDown(self):
         """Clean up temp directories"""
         shutil.rmtree(self.temp_cache_dir, ignore_errors=True)
         shutil.rmtree(self.temp_screenshots_dir, ignore_errors=True)
         shutil.rmtree(self.temp_user_scripts_dir, ignore_errors=True)
-        
-        server.CACHE_DIR = self.original_cache_dir
-        server.SCREENSHOTS_DIR = self.original_screenshots_dir
-        server.USER_SCRIPTS_DIR = self.original_user_scripts_dir
     
-    @patch('server.Driver')
+    @patch('endpoints.article.Driver')
     def test_article_endpoint_full_content_parameter(self, mock_driver_class):
         """Test full-content parameter includes full HTML"""
         mock_driver = MagicMock()
@@ -304,7 +305,7 @@ class TestArticleEndpointParameters(unittest.TestCase):
         self.assertIsNotNone(data['fullContent'])
         self.assertIn('Full HTML content', data['fullContent'])
     
-    @patch('server.Driver')
+    @patch('endpoints.article.Driver')
     def test_article_endpoint_viewport_parameters(self, mock_driver_class):
         """Test viewport-width and viewport-height parameters"""
         mock_driver = MagicMock()
@@ -317,7 +318,7 @@ class TestArticleEndpointParameters(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         mock_driver.set_window_size.assert_called_once_with(1024, 768)
     
-    @patch('server.Driver')
+    @patch('endpoints.article.Driver')
     def test_article_endpoint_timeout_parameter(self, mock_driver_class):
         """Test timeout parameter"""
         mock_driver = MagicMock()
@@ -330,7 +331,7 @@ class TestArticleEndpointParameters(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         mock_driver.set_page_load_timeout.assert_called_once_with(30.0)
     
-    @patch('server.Driver')
+    @patch('endpoints.article.Driver')
     @patch('time.sleep')
     def test_article_endpoint_sleep_parameter(self, mock_sleep, mock_driver_class):
         """Test sleep parameter"""
@@ -347,7 +348,7 @@ class TestArticleEndpointParameters(unittest.TestCase):
         sleep_calls = [call[0][0] for call in mock_sleep.call_args_list]
         self.assertIn(2.0, sleep_calls)
     
-    @patch('server.Driver')
+    @patch('endpoints.article.Driver')
     def test_article_endpoint_scroll_down_parameter(self, mock_driver_class):
         """Test scroll-down parameter"""
         mock_driver = MagicMock()
@@ -363,7 +364,7 @@ class TestArticleEndpointParameters(unittest.TestCase):
         script_calls = [str(call) for call in mock_driver.execute_script.call_args_list]
         self.assertTrue(any('scrollBy' in str(call) for call in script_calls))
     
-    @patch('server.Driver')
+    @patch('endpoints.article.Driver')
     def test_article_endpoint_user_scripts_parameter(self, mock_driver_class):
         """Test user-scripts parameter"""
         mock_driver = MagicMock()
@@ -372,7 +373,7 @@ class TestArticleEndpointParameters(unittest.TestCase):
         mock_driver.page_source = '<html><body>Test</body></html>'
         
         # Create a test user script
-        script_path = server.USER_SCRIPTS_DIR / 'test-script.js'
+        script_path = Path(self.temp_user_scripts_dir) / 'test-script.js'
         with open(script_path, 'w') as f:
             f.write('console.log("test");')
         
@@ -382,7 +383,7 @@ class TestArticleEndpointParameters(unittest.TestCase):
         # Verify execute_script was called with user script
         mock_driver.execute_script.assert_called()
     
-    @patch('server.Driver')
+    @patch('endpoints.article.Driver')
     def test_article_endpoint_incognito_parameter(self, mock_driver_class):
         """Test incognito parameter"""
         mock_driver = MagicMock()
@@ -403,32 +404,38 @@ class TestArticleEndpointCaching(unittest.TestCase):
     
     def setUp(self):
         """Set up test client and temp directories"""
-        server.app.config['TESTING'] = True
-        self.client = server.app.test_client()
+        from endpoints import article, health, root
+        from flask import Flask
+        
+        self.app = Flask(__name__)
+        self.app.config['TESTING'] = True
+        self.client = self.app.test_client()
         
         self.temp_cache_dir = tempfile.mkdtemp()
         self.temp_screenshots_dir = tempfile.mkdtemp()
         self.temp_user_scripts_dir = tempfile.mkdtemp()
         
-        self.original_cache_dir = server.CACHE_DIR
-        self.original_screenshots_dir = server.SCREENSHOTS_DIR
-        self.original_user_scripts_dir = server.USER_SCRIPTS_DIR
-        
-        server.CACHE_DIR = Path(self.temp_cache_dir)
-        server.SCREENSHOTS_DIR = Path(self.temp_screenshots_dir)
-        server.USER_SCRIPTS_DIR = Path(self.temp_user_scripts_dir)
+        health.register_routes(self.app)
+        root.register_routes(self.app)
+        article.register_routes(
+            self.app, Path(self.temp_cache_dir), Path(self.temp_user_scripts_dir), Path(self.temp_screenshots_dir),
+            server.DEFAULT_CACHE, server.DEFAULT_FULL_CONTENT, server.DEFAULT_SCREENSHOT,
+            server.DEFAULT_USER_SCRIPTS, server.DEFAULT_USER_SCRIPTS_TIMEOUT, server.DEFAULT_INCOGNITO,
+            server.DEFAULT_TIMEOUT, server.DEFAULT_WAIT_UNTIL, server.DEFAULT_SLEEP, server.DEFAULT_RESOURCE,
+            server.DEFAULT_VIEWPORT_WIDTH, server.DEFAULT_VIEWPORT_HEIGHT, server.DEFAULT_SCREEN_WIDTH,
+            server.DEFAULT_SCREEN_HEIGHT, server.DEFAULT_DEVICE, server.DEFAULT_SCROLL_DOWN,
+            server.DEFAULT_IGNORE_HTTPS_ERRORS, server.DEFAULT_USER_AGENT, server.DEFAULT_LOCALE,
+            server.DEFAULT_TIMEZONE, server.DEFAULT_HTTP_CREDENTIALS, server.DEFAULT_EXTRA_HTTP_HEADERS,
+            server.DEFAULT_CACHE_TTL
+        )
     
     def tearDown(self):
         """Clean up temp directories"""
         shutil.rmtree(self.temp_cache_dir, ignore_errors=True)
         shutil.rmtree(self.temp_screenshots_dir, ignore_errors=True)
         shutil.rmtree(self.temp_user_scripts_dir, ignore_errors=True)
-        
-        server.CACHE_DIR = self.original_cache_dir
-        server.SCREENSHOTS_DIR = self.original_screenshots_dir
-        server.USER_SCRIPTS_DIR = self.original_user_scripts_dir
     
-    @patch('server.Driver')
+    @patch('endpoints.article.Driver')
     def test_article_endpoint_saves_to_cache(self, mock_driver_class):
         """Test that results are saved to cache"""
         mock_driver = MagicMock()
@@ -441,10 +448,10 @@ class TestArticleEndpointCaching(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         
         # Check that cache file was created
-        cache_files = list(server.CACHE_DIR.glob('*.json'))
+        cache_files = list(Path(self.temp_cache_dir).glob('*.json'))
         self.assertGreater(len(cache_files), 0)
     
-    @patch('server.Driver')
+    @patch('endpoints.article.Driver')
     def test_article_endpoint_uses_cache_when_enabled(self, mock_driver_class):
         """Test that cached results are used when cache=true"""
         mock_driver = MagicMock()
@@ -466,7 +473,7 @@ class TestArticleEndpointCaching(unittest.TestCase):
         # Verify Driver was NOT instantiated again (cache was used)
         mock_driver_class.assert_not_called()
     
-    @patch('server.Driver')
+    @patch('endpoints.article.Driver')
     def test_article_endpoint_ignores_cache_by_default(self, mock_driver_class):
         """Test that cache is not used by default"""
         mock_driver = MagicMock()
@@ -494,32 +501,38 @@ class TestArticleEndpointScreenshot(unittest.TestCase):
     
     def setUp(self):
         """Set up test client and temp directories"""
-        server.app.config['TESTING'] = True
-        self.client = server.app.test_client()
+        from endpoints import article, health, root
+        from flask import Flask
+        
+        self.app = Flask(__name__)
+        self.app.config['TESTING'] = True
+        self.client = self.app.test_client()
         
         self.temp_cache_dir = tempfile.mkdtemp()
         self.temp_screenshots_dir = tempfile.mkdtemp()
         self.temp_user_scripts_dir = tempfile.mkdtemp()
         
-        self.original_cache_dir = server.CACHE_DIR
-        self.original_screenshots_dir = server.SCREENSHOTS_DIR
-        self.original_user_scripts_dir = server.USER_SCRIPTS_DIR
-        
-        server.CACHE_DIR = Path(self.temp_cache_dir)
-        server.SCREENSHOTS_DIR = Path(self.temp_screenshots_dir)
-        server.USER_SCRIPTS_DIR = Path(self.temp_user_scripts_dir)
+        health.register_routes(self.app)
+        root.register_routes(self.app)
+        article.register_routes(
+            self.app, Path(self.temp_cache_dir), Path(self.temp_user_scripts_dir), Path(self.temp_screenshots_dir),
+            server.DEFAULT_CACHE, server.DEFAULT_FULL_CONTENT, server.DEFAULT_SCREENSHOT,
+            server.DEFAULT_USER_SCRIPTS, server.DEFAULT_USER_SCRIPTS_TIMEOUT, server.DEFAULT_INCOGNITO,
+            server.DEFAULT_TIMEOUT, server.DEFAULT_WAIT_UNTIL, server.DEFAULT_SLEEP, server.DEFAULT_RESOURCE,
+            server.DEFAULT_VIEWPORT_WIDTH, server.DEFAULT_VIEWPORT_HEIGHT, server.DEFAULT_SCREEN_WIDTH,
+            server.DEFAULT_SCREEN_HEIGHT, server.DEFAULT_DEVICE, server.DEFAULT_SCROLL_DOWN,
+            server.DEFAULT_IGNORE_HTTPS_ERRORS, server.DEFAULT_USER_AGENT, server.DEFAULT_LOCALE,
+            server.DEFAULT_TIMEZONE, server.DEFAULT_HTTP_CREDENTIALS, server.DEFAULT_EXTRA_HTTP_HEADERS,
+            server.DEFAULT_CACHE_TTL
+        )
     
     def tearDown(self):
         """Clean up temp directories"""
         shutil.rmtree(self.temp_cache_dir, ignore_errors=True)
         shutil.rmtree(self.temp_screenshots_dir, ignore_errors=True)
         shutil.rmtree(self.temp_user_scripts_dir, ignore_errors=True)
-        
-        server.CACHE_DIR = self.original_cache_dir
-        server.SCREENSHOTS_DIR = self.original_screenshots_dir
-        server.USER_SCRIPTS_DIR = self.original_user_scripts_dir
     
-    @patch('server.Driver')
+    @patch('endpoints.article.Driver')
     def test_article_endpoint_screenshot_parameter_false(self, mock_driver_class):
         """Test that screenshot is None when screenshot=false"""
         mock_driver = MagicMock()
@@ -533,7 +546,7 @@ class TestArticleEndpointScreenshot(unittest.TestCase):
         self.assertIsNone(data['screenshotUri'])
         mock_driver.save_screenshot.assert_not_called()
     
-    @patch('server.Driver')
+    @patch('endpoints.article.Driver')
     def test_article_endpoint_screenshot_parameter_true(self, mock_driver_class):
         """Test that screenshot is taken when screenshot=true"""
         mock_driver = MagicMock()
@@ -548,7 +561,6 @@ class TestArticleEndpointScreenshot(unittest.TestCase):
         self.assertIsNotNone(data['screenshotUri'])
         self.assertTrue(data['screenshotUri'].startswith('file://screenshots/'))
         mock_driver.save_screenshot.assert_called_once()
-
 
 if __name__ == '__main__':
     unittest.main()

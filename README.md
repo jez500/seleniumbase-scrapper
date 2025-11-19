@@ -33,10 +33,10 @@ Replace `v4.44.10` with any valid SeleniumBase git tag from the [SeleniumBase re
 Start the container with the API server:
 
 ```bash
-docker run -d -p 8000:8000 --name seleniumbase-api seleniumbase-api
+docker run -d -p 3000:3000 --name seleniumbase-api seleniumbase-api
 ```
 
-The API will be automatically started and available on port 8000.
+The API will be automatically started and available on port 3000.
 
 ## Configuration
 
@@ -48,7 +48,7 @@ of the API without changing query parameters for each request.
 Example with environment variables:
 
 ```bash
-docker run -d -p 8000:8000 \
+docker run -d -p 3000:3000 \
   -e DEFAULT_CACHE=true \
   -e DEFAULT_FULL_CONTENT=false \
   -e DEFAULT_SCREENSHOT=false \
@@ -58,7 +58,22 @@ docker run -d -p 8000:8000 \
   --name seleniumbase-api seleniumbase-api
 ```
 
+Example with custom host and port:
+
+```bash
+docker run -d -p 9000:9000 \
+  -e API_HOST=0.0.0.0 \
+  -e API_PORT=9000 \
+  --name seleniumbase-api seleniumbase-api
+```
+
 All available environment variables:
+
+#### Server Configuration
+- `API_HOST` (default: `0.0.0.0`) - The host/IP address the server binds to
+- `API_PORT` (default: `3000`) - The port the server listens on
+
+#### Scraper and Browser Defaults
 - `DEFAULT_CACHE` (default: `false`)
 - `DEFAULT_CACHE_TTL` (default: `3600` - cache time-to-live in seconds, 60 minutes)
 - `DEFAULT_FULL_CONTENT` (default: `false`)
@@ -111,13 +126,13 @@ User scripts allow you to execute custom JavaScript code on the page after it lo
 **Usage:**
 
 ```bash
-curl -X GET "http://localhost:8000/api/article?url=https://example.com&user-scripts=example-remove-ads.js"
+curl -X GET "http://localhost:3000/api/article?url=https://example.com&user-scripts=example-remove-ads.js"
 ```
 
 Multiple scripts can be specified separated by commas:
 
 ```bash
-curl -X GET "http://localhost:8000/api/article?url=https://example.com&user-scripts=remove-ads.js,accept-cookies.js"
+curl -X GET "http://localhost:3000/api/article?url=https://example.com&user-scripts=remove-ads.js,accept-cookies.js"
 ```
 
 ## API Endpoints
@@ -167,32 +182,32 @@ All parameters except `url` have default values that can be set via environment 
 
 Basic usage:
 ```bash
-curl -X GET "http://localhost:8000/api/article?url=https://en.wikipedia.org/wiki/web_scraping"
+curl -X GET "http://localhost:3000/api/article?url=https://en.wikipedia.org/wiki/web_scraping"
 ```
 
 With caching enabled:
 ```bash
-curl -X GET "http://localhost:8000/api/article?url=https://example.com&cache=true"
+curl -X GET "http://localhost:3000/api/article?url=https://example.com&cache=true"
 ```
 
 With full content and screenshot:
 ```bash
-curl -X GET "http://localhost:8000/api/article?url=https://example.com&full-content=true&screenshot=true"
+curl -X GET "http://localhost:3000/api/article?url=https://example.com&full-content=true&screenshot=true"
 ```
 
 With custom viewport and sleep:
 ```bash
-curl -X GET "http://localhost:8000/api/article?url=https://example.com&viewport-width=1024&viewport-height=768&sleep=2000"
+curl -X GET "http://localhost:3000/api/article?url=https://example.com&viewport-width=1024&viewport-height=768&sleep=2000"
 ```
 
 With user scripts:
 ```bash
-curl -X GET "http://localhost:8000/api/article?url=https://example.com&user-scripts=example-remove-ads.js&user-scripts-timeout=1000"
+curl -X GET "http://localhost:3000/api/article?url=https://example.com&user-scripts=example-remove-ads.js&user-scripts-timeout=1000"
 ```
 
 With scroll for lazy-loading content:
 ```bash
-curl -X GET "http://localhost:8000/api/article?url=https://example.com&scroll-down=1000&sleep=2000"
+curl -X GET "http://localhost:3000/api/article?url=https://example.com&scroll-down=1000&sleep=2000"
 ```
 
 **Response Fields:**
@@ -281,7 +296,7 @@ Health check endpoint to verify the API is running.
 **Example:**
 
 ```bash
-curl -X GET "http://localhost:8000/health"
+curl -X GET "http://localhost:3000/health"
 ```
 
 **Response:**
@@ -299,7 +314,7 @@ Root endpoint that provides API documentation.
 **Example:**
 
 ```bash
-curl -X GET "http://localhost:8000/"
+curl -X GET "http://localhost:3000/"
 ```
 
 **Response:**
@@ -329,19 +344,19 @@ curl -X GET "http://localhost:8000/"
 ### Fetch Wikipedia Page
 
 ```bash
-curl -X GET "http://localhost:8000/api/article?url=https://en.wikipedia.org/wiki/Python_(programming_language)"
+curl -X GET "http://localhost:3000/api/article?url=https://en.wikipedia.org/wiki/Python_(programming_language)"
 ```
 
 ### Fetch Any Website
 
 ```bash
-curl -X GET "http://localhost:8000/api/article?url=https://www.example.com"
+curl -X GET "http://localhost:3000/api/article?url=https://www.example.com"
 ```
 
 ### Save HTML to File
 
 ```bash
-curl -X GET "http://localhost:8000/api/article?url=https://www.example.com" -o output.html
+curl -X GET "http://localhost:3000/api/article?url=https://www.example.com" -o output.html
 ```
 
 ## Features
@@ -356,7 +371,7 @@ curl -X GET "http://localhost:8000/api/article?url=https://www.example.com" -o o
 
 - **Framework**: Flask
 - **Browser**: Chrome (headless)
-- **Port**: 8000
+- **Port**: 3000
 - **SeleniumBase Driver**: UC mode enabled for better compatibility
 
 ## Container Management
@@ -390,7 +405,7 @@ docker rm -f seleniumbase-api
 You can also run the container interactively while still having the API available:
 
 ```bash
-docker run -it -p 8000:8000 --name seleniumbase-api seleniumbase-api
+docker run -it -p 3000:3000 --name seleniumbase-api seleniumbase-api
 ```
 
 The API server will start automatically in the background, and you'll have access to a bash shell.
@@ -400,7 +415,7 @@ The API server will start automatically in the background, and you'll have acces
 ### Check if API is running
 
 ```bash
-curl http://localhost:8000/health
+curl http://localhost:3000/health
 ```
 
 ### View API logs inside container
@@ -413,10 +428,10 @@ ps aux | grep python
 
 ### Port already in use
 
-If port 8000 is already in use, map to a different port:
+If port 3000 is already in use, map to a different port:
 
 ```bash
-docker run -d -p 9000:8000 --name seleniumbase-api seleniumbase-api
+docker run -d -p 9000:3000 --name seleniumbase-api seleniumbase-api
 curl -X GET "http://localhost:9000/api/article?url=https://example.com"
 ```
 
@@ -437,7 +452,7 @@ Tests are designed to run inside the Docker container where all dependencies are
 
 ```bash
 # Start a container with bash access
-docker run -it -p 8000:8000 --name seleniumbase-api-test seleniumbase-api bash
+docker run -it -p 3000:3000 --name seleniumbase-api-test seleniumbase-api bash
 
 # Inside the container, navigate to the API directory
 cd /SeleniumBase/api

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Unit tests for helper functions in server.py
+Unit tests for helper functions in helpers.py
 """
 import unittest
 import json
@@ -13,10 +13,10 @@ from bs4 import BeautifulSoup
 import sys
 import os
 
-# Add parent directory to path to import server
+# Add parent directory to path to import helpers
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-import server
+import helpers
 
 
 class TestCacheFunctions(unittest.TestCase):
@@ -25,21 +25,20 @@ class TestCacheFunctions(unittest.TestCase):
     def setUp(self):
         """Create temporary cache directory for testing"""
         self.temp_dir = tempfile.mkdtemp()
-        self.original_cache_dir = server.CACHE_DIR
-        server.CACHE_DIR = Path(self.temp_dir)
+        self.cache_dir = Path(self.temp_dir)
+        self.cache_ttl = 3600  # 1 hour default
     
     def tearDown(self):
         """Clean up temporary cache directory"""
         shutil.rmtree(self.temp_dir)
-        server.CACHE_DIR = self.original_cache_dir
     
     def test_get_cache_key_generates_consistent_hash(self):
         """Test that cache key generation is consistent"""
         url = "https://example.com"
         params = {"param1": "value1", "param2": "value2"}
         
-        key1 = server.get_cache_key(url, params)
-        key2 = server.get_cache_key(url, params)
+        key1 = helpers.get_cache_key(url, params)
+        key2 = helpers.get_cache_key(url, params)
         
         self.assertEqual(key1, key2)
         self.assertEqual(len(key1), 32)  # MD5 hash length
@@ -50,8 +49,8 @@ class TestCacheFunctions(unittest.TestCase):
         url2 = "https://example.org"
         params = {"param": "value"}
         
-        key1 = server.get_cache_key(url1, params)
-        key2 = server.get_cache_key(url2, params)
+        key1 = helpers.get_cache_key(url1, params)
+        key2 = helpers.get_cache_key(url2, params)
         
         self.assertNotEqual(key1, key2)
     
@@ -61,8 +60,8 @@ class TestCacheFunctions(unittest.TestCase):
         params1 = {"a": "1", "b": "2", "c": "3"}
         params2 = {"c": "3", "a": "1", "b": "2"}
         
-        key1 = server.get_cache_key(url, params1)
-        key2 = server.get_cache_key(url, params2)
+        key1 = helpers.get_cache_key(url, params1)
+        key2 = helpers.get_cache_key(url, params2)
         
         self.assertEqual(key1, key2)
     
@@ -71,9 +70,9 @@ class TestCacheFunctions(unittest.TestCase):
         cache_key = "test_key"
         data = {"test": "data"}
         
-        server.save_to_cache(cache_key, data)
+        helpers.save_to_cache(cache_key, data, self.cache_dir)
         
-        cache_file = server.CACHE_DIR / f"{cache_key}.json"
+        cache_file = self.cache_dir / f"{cache_key}.json"
         self.assertTrue(cache_file.exists())
     
     def test_save_to_cache_includes_timestamp(self):
@@ -82,10 +81,10 @@ class TestCacheFunctions(unittest.TestCase):
         data = {"test": "data"}
         
         before_time = time.time()
-        server.save_to_cache(cache_key, data)
+        helpers.save_to_cache(cache_key, data, self.cache_dir)
         after_time = time.time()
         
-        cache_file = server.CACHE_DIR / f"{cache_key}.json"
+        cache_file = self.cache_dir / f"{cache_key}.json"
         with open(cache_file, 'r') as f:
             cache_entry = json.load(f)
         
@@ -97,7 +96,7 @@ class TestCacheFunctions(unittest.TestCase):
     
     def test_get_cached_result_returns_none_if_not_exists(self):
         """Test that get_cached_result returns None if cache doesn't exist"""
-        result = server.get_cached_result("nonexistent_key")
+        result = helpers.get_cached_result("nonexistent_key", self.cache_dir, self.cache_ttl)
         self.assertIsNone(result)
     
     def test_get_cached_result_returns_data_if_valid(self):
@@ -105,8 +104,8 @@ class TestCacheFunctions(unittest.TestCase):
         cache_key = "test_key"
         data = {"test": "data"}
         
-        server.save_to_cache(cache_key, data)
-        result = server.get_cached_result(cache_key)
+        helpers.save_to_cache(cache_key, data, self.cache_dir)
+        result = helpers.get_cached_result(cache_key, self.cache_dir, self.cache_ttl)
         
         self.assertEqual(result, data)
     
@@ -116,15 +115,15 @@ class TestCacheFunctions(unittest.TestCase):
         data = {"test": "data"}
         
         # Save cache with old timestamp
-        cache_file = server.CACHE_DIR / f"{cache_key}.json"
+        cache_file = self.cache_dir / f"{cache_key}.json"
         cache_entry = {
-            'timestamp': time.time() - server.DEFAULT_CACHE_TTL - 1,
+            'timestamp': time.time() - self.cache_ttl - 1,
             'data': data
         }
         with open(cache_file, 'w') as f:
             json.dump(cache_entry, f)
         
-        result = server.get_cached_result(cache_key)
+        result = helpers.get_cached_result(cache_key, self.cache_dir, self.cache_ttl)
         self.assertIsNone(result)
     
     def test_get_cached_result_handles_old_format(self):
@@ -133,11 +132,11 @@ class TestCacheFunctions(unittest.TestCase):
         data = {"test": "data"}
         
         # Save cache in old format (without timestamp wrapper)
-        cache_file = server.CACHE_DIR / f"{cache_key}.json"
+        cache_file = self.cache_dir / f"{cache_key}.json"
         with open(cache_file, 'w') as f:
             json.dump(data, f)
         
-        result = server.get_cached_result(cache_key)
+        result = helpers.get_cached_result(cache_key, self.cache_dir, self.cache_ttl)
         self.assertIsNone(result)
     
     def test_get_cached_result_handles_corrupted_cache(self):
@@ -145,11 +144,11 @@ class TestCacheFunctions(unittest.TestCase):
         cache_key = "test_key"
         
         # Create corrupted cache file
-        cache_file = server.CACHE_DIR / f"{cache_key}.json"
+        cache_file = self.cache_dir / f"{cache_key}.json"
         with open(cache_file, 'w') as f:
             f.write("invalid json{")
         
-        result = server.get_cached_result(cache_key)
+        result = helpers.get_cached_result(cache_key, self.cache_dir, self.cache_ttl)
         self.assertIsNone(result)
 
 
@@ -158,55 +157,55 @@ class TestParsingFunctions(unittest.TestCase):
     
     def test_parse_bool_param_with_none_returns_default(self):
         """Test parse_bool_param returns default when value is None"""
-        self.assertTrue(server.parse_bool_param(None, True))
-        self.assertFalse(server.parse_bool_param(None, False))
+        self.assertTrue(helpers.parse_bool_param(None, True))
+        self.assertFalse(helpers.parse_bool_param(None, False))
     
     def test_parse_bool_param_with_bool_returns_value(self):
         """Test parse_bool_param returns value when it's already a bool"""
-        self.assertTrue(server.parse_bool_param(True, False))
-        self.assertFalse(server.parse_bool_param(False, True))
+        self.assertTrue(helpers.parse_bool_param(True, False))
+        self.assertFalse(helpers.parse_bool_param(False, True))
     
     def test_parse_bool_param_with_string_true_values(self):
         """Test parse_bool_param with string true values"""
         for value in ['true', 'True', 'TRUE', '1', 'yes', 'Yes', 'YES']:
-            self.assertTrue(server.parse_bool_param(value, False))
+            self.assertTrue(helpers.parse_bool_param(value, False))
     
     def test_parse_bool_param_with_string_false_values(self):
         """Test parse_bool_param with string false values"""
         for value in ['false', 'False', 'FALSE', '0', 'no', 'No', 'NO']:
-            self.assertFalse(server.parse_bool_param(value, True))
+            self.assertFalse(helpers.parse_bool_param(value, True))
     
     def test_parse_int_param_with_none_returns_default(self):
         """Test parse_int_param returns default when value is None"""
-        self.assertEqual(server.parse_int_param(None, 42), 42)
+        self.assertEqual(helpers.parse_int_param(None, 42), 42)
     
     def test_parse_int_param_with_empty_string_returns_default(self):
         """Test parse_int_param returns default when value is empty string"""
-        self.assertEqual(server.parse_int_param('', 42), 42)
+        self.assertEqual(helpers.parse_int_param('', 42), 42)
     
     def test_parse_int_param_with_valid_int_string(self):
         """Test parse_int_param with valid integer string"""
-        self.assertEqual(server.parse_int_param('123', 0), 123)
-        self.assertEqual(server.parse_int_param('0', 42), 0)
-        self.assertEqual(server.parse_int_param('-5', 0), -5)
+        self.assertEqual(helpers.parse_int_param('123', 0), 123)
+        self.assertEqual(helpers.parse_int_param('0', 42), 0)
+        self.assertEqual(helpers.parse_int_param('-5', 0), -5)
     
     def test_parse_int_param_with_invalid_string_returns_default(self):
         """Test parse_int_param returns default with invalid string"""
-        self.assertEqual(server.parse_int_param('abc', 42), 42)
-        self.assertEqual(server.parse_int_param('12.5', 42), 42)
+        self.assertEqual(helpers.parse_int_param('abc', 42), 42)
+        self.assertEqual(helpers.parse_int_param('12.5', 42), 42)
     
     def test_parse_list_param_with_none_returns_default(self):
         """Test parse_list_param returns default when value is None"""
-        self.assertEqual(server.parse_list_param(None, 'default'), 'default')
+        self.assertEqual(helpers.parse_list_param(None, 'default'), 'default')
     
     def test_parse_list_param_with_empty_string_returns_default(self):
         """Test parse_list_param returns default when value is empty string"""
-        self.assertEqual(server.parse_list_param('', 'default'), 'default')
+        self.assertEqual(helpers.parse_list_param('', 'default'), 'default')
     
     def test_parse_list_param_with_value_returns_value(self):
         """Test parse_list_param returns value when provided"""
-        self.assertEqual(server.parse_list_param('a,b,c', ''), 'a,b,c')
-        self.assertEqual(server.parse_list_param('single', ''), 'single')
+        self.assertEqual(helpers.parse_list_param('a,b,c', ''), 'a,b,c')
+        self.assertEqual(helpers.parse_list_param('single', ''), 'single')
 
 
 class TestExtractMetaTags(unittest.TestCase):
@@ -216,7 +215,7 @@ class TestExtractMetaTags(unittest.TestCase):
         """Test extract_meta_tags returns None when no meta tags found"""
         html = "<html><head><title>Test</title></head><body></body></html>"
         soup = BeautifulSoup(html, 'html.parser')
-        result = server.extract_meta_tags(soup)
+        result = helpers.extract_meta_tags(soup)
         self.assertIsNone(result)
     
     def test_extract_meta_tags_with_og_tags(self):
@@ -232,7 +231,7 @@ class TestExtractMetaTags(unittest.TestCase):
         </html>
         """
         soup = BeautifulSoup(html, 'html.parser')
-        result = server.extract_meta_tags(soup)
+        result = helpers.extract_meta_tags(soup)
         
         self.assertIsNotNone(result)
         self.assertEqual(result['og_title'], 'Test Title')
@@ -251,7 +250,7 @@ class TestExtractMetaTags(unittest.TestCase):
         </html>
         """
         soup = BeautifulSoup(html, 'html.parser')
-        result = server.extract_meta_tags(soup)
+        result = helpers.extract_meta_tags(soup)
         
         self.assertIsNotNone(result)
         self.assertEqual(result['twitter_card'], 'summary')
@@ -269,7 +268,7 @@ class TestExtractMetaTags(unittest.TestCase):
         </html>
         """
         soup = BeautifulSoup(html, 'html.parser')
-        result = server.extract_meta_tags(soup)
+        result = helpers.extract_meta_tags(soup)
         
         self.assertIsNotNone(result)
         self.assertEqual(result['og_title'], 'OG Title')
@@ -292,7 +291,7 @@ class TestExtractArticleContent(unittest.TestCase):
         </html>
         """
         soup = BeautifulSoup(html, 'html.parser')
-        result = server.extract_article_content(soup)
+        result = helpers.extract_article_content(soup)
         
         self.assertIsNotNone(result)
         self.assertIn('Article Title', result)
@@ -311,7 +310,7 @@ class TestExtractArticleContent(unittest.TestCase):
         </html>
         """
         soup = BeautifulSoup(html, 'html.parser')
-        result = server.extract_article_content(soup)
+        result = helpers.extract_article_content(soup)
         
         self.assertIsNotNone(result)
         self.assertIn('Main Title', result)
@@ -330,7 +329,7 @@ class TestExtractArticleContent(unittest.TestCase):
         </html>
         """
         soup = BeautifulSoup(html, 'html.parser')
-        result = server.extract_article_content(soup)
+        result = helpers.extract_article_content(soup)
         
         self.assertIsNotNone(result)
         self.assertIn('Content Title', result)
@@ -348,7 +347,7 @@ class TestExtractArticleContent(unittest.TestCase):
         </html>
         """
         soup = BeautifulSoup(html, 'html.parser')
-        result = server.extract_article_content(soup)
+        result = helpers.extract_article_content(soup)
         
         self.assertIsNone(result)
     
@@ -363,7 +362,7 @@ class TestExtractArticleContent(unittest.TestCase):
         </html>
         """
         soup = BeautifulSoup(html, 'html.parser')
-        result = server.extract_article_content(soup)
+        result = helpers.extract_article_content(soup)
         
         self.assertIn('Article content', result)
         self.assertNotIn('Main content', result)
@@ -383,7 +382,7 @@ class TestExtractTextContent(unittest.TestCase):
         </html>
         """
         soup = BeautifulSoup(html, 'html.parser')
-        result = server.extract_text_content(soup)
+        result = helpers.extract_text_content(soup)
         
         self.assertIn('Visible text', result)
         self.assertNotIn('script', result)
@@ -399,7 +398,7 @@ class TestExtractTextContent(unittest.TestCase):
         </html>
         """
         soup = BeautifulSoup(html, 'html.parser')
-        result = server.extract_text_content(soup)
+        result = helpers.extract_text_content(soup)
         
         self.assertIn('Visible text', result)
         self.assertNotIn('color', result)
@@ -417,7 +416,7 @@ class TestExtractTextContent(unittest.TestCase):
         </html>
         """
         soup = BeautifulSoup(html, 'html.parser')
-        result = server.extract_text_content(soup)
+        result = helpers.extract_text_content(soup)
         
         self.assertIn('Main content', result)
         self.assertNotIn('Header content', result)
@@ -437,7 +436,7 @@ class TestExtractTextContent(unittest.TestCase):
         </html>
         """
         soup = BeautifulSoup(html, 'html.parser')
-        result = server.extract_text_content(soup)
+        result = helpers.extract_text_content(soup)
         
         # Should not have more than 2 consecutive newlines
         self.assertNotIn('\n\n\n', result)
@@ -452,7 +451,7 @@ class TestExtractTextContent(unittest.TestCase):
         </html>
         """
         soup = BeautifulSoup(html, 'html.parser')
-        result = server.extract_text_content(soup)
+        result = helpers.extract_text_content(soup)
         
         # Should return None or empty after cleanup
         self.assertTrue(result is None or result.strip() == '')
@@ -472,7 +471,7 @@ class TestExtractPublishedTime(unittest.TestCase):
         </html>
         """
         soup = BeautifulSoup(html, 'html.parser')
-        result = server.extract_published_time(soup)
+        result = helpers.extract_published_time(soup)
         
         self.assertEqual(result, '2023-01-15T10:30:00Z')
     
@@ -487,7 +486,7 @@ class TestExtractPublishedTime(unittest.TestCase):
         </html>
         """
         soup = BeautifulSoup(html, 'html.parser')
-        result = server.extract_published_time(soup)
+        result = helpers.extract_published_time(soup)
         
         self.assertEqual(result, '2023-01-15')
     
@@ -501,7 +500,7 @@ class TestExtractPublishedTime(unittest.TestCase):
         </html>
         """
         soup = BeautifulSoup(html, 'html.parser')
-        result = server.extract_published_time(soup)
+        result = helpers.extract_published_time(soup)
         
         self.assertEqual(result, '2023-01-15T10:30:00Z')
     
@@ -514,7 +513,7 @@ class TestExtractPublishedTime(unittest.TestCase):
         </html>
         """
         soup = BeautifulSoup(html, 'html.parser')
-        result = server.extract_published_time(soup)
+        result = helpers.extract_published_time(soup)
         
         self.assertIsNone(result)
     
@@ -532,7 +531,7 @@ class TestExtractPublishedTime(unittest.TestCase):
         </html>
         """
         soup = BeautifulSoup(html, 'html.parser')
-        result = server.extract_published_time(soup)
+        result = helpers.extract_published_time(soup)
         
         self.assertEqual(result, '2023-01-15')
 
