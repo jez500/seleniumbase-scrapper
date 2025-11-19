@@ -146,13 +146,20 @@ def register_routes(app, cache_dir, user_scripts_dir, screenshots_dir,
             
             logger.info(f"Fetching URL: {url}")
             
+            # Detect browser type: Chromium vs Chrome (Chromium is used for arm64 arch)
+            # If /usr/bin/chromium-browser exists, we're using Chromium (uc=False)
+            # Otherwise, we're using Chrome (uc=True)
+            is_chromium = os.path.exists('/usr/bin/chromium-browser')
+            use_uc_mode = not is_chromium
+            
+            logger.info(f"Browser detected: {'Chromium' if is_chromium else 'Chrome'}, uc mode: {use_uc_mode}")
+            
             # Initialize SeleniumBase Driver with configuration
             driver_kwargs = {
                 'browser': 'chrome',
                 'headless': True,
-                'uc': True,
+                'uc': use_uc_mode,
                 'incognito': incognito,
-                'binary_location': '/usr/bin/chromedriver',
             }
             
             # Note: SeleniumBase Driver may not support all these options directly

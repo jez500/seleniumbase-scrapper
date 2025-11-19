@@ -4,8 +4,17 @@ SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 ENV PYTHONUNBUFFERED=1
 ENV PYTHONIOENCODING=UTF-8
 
+# API version
+ARG API_VERSION=latest
+ENV API_VERSION=${API_VERSION}
+
 # ARG for SeleniumBase version
 ARG SELENIUMBASE_VERSION=v4.44.10
+
+# Arch
+ARG TARGETARCH
+
+RUN echo "Building for Arch $TARGETARCH"
 
 #============================
 # Locale Configuration
@@ -80,10 +89,13 @@ RUN apt-get update && apt-get install -qy --no-install-recommends \
 # Install Chrome and python.
 #============================
 RUN apt-get update && \
-    # Chrome.
-    wget https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb && \
-    apt-get install -y ./google-chrome-stable_current_amd64.deb && \
-    rm ./google-chrome-stable_current_amd64.deb && \
+    if [ "$TARGETARCH" = "arm64" ]; then \
+        apt-get install -y chromium-browser chromium-chromedriver; \
+    else \
+        wget https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb && \
+        apt-get install -y ./google-chrome-stable_current_amd64.deb && \
+        rm ./google-chrome-stable_current_amd64.deb; \
+    fi && \
     # Python.
     apt-get install -y python3 python3-pip python3-setuptools python3-dev python3-tk && \
     alias python=python3 && \
@@ -135,9 +147,7 @@ WORKDIR /SeleniumBase
 #============================
 # Expose API port
 #============================
-EXPOSE 8000
-
-
+EXPOSE 3000
 
 ENTRYPOINT ["/docker-entrypoint-api.sh"]
 CMD ["/bin/bash"]

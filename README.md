@@ -5,38 +5,18 @@ This project exposes an HTTP API for SeleniumBase, allowing you to fetch web pag
 Its API is based on [scrapper](https://github.com/amerkurev/scrapper) (which uses playwrite) and uses the same parameters 
 and response format so it should be interchangeable with it.
 
-## Building the Docker Image
+## Browsers
 
-The `Dockerfile` downloads the SeleniumBase repository from GitHub during the build process, so you only need the `api` 
-directory and `Dockerfile` locally.
+The `amd64` docker image includes `Chrome` pre-installed. This is the preferred browser
+as it supports SeleniumBase's full feature set, specifically the [UC Mode](https://seleniumbase.io/help_docs/uc_mode/)
+which is better for web scraping.
 
-### Basic Build
+The `arm64` docker image includes `Chromium` pre-installed which does not support 
+UC Mode, so it might not be as reliable as the `amd64` image for scraping.
 
-To build the Docker image with API support using the default SeleniumBase version (v4.44.10):
+## Prebuilt Images ![Docker Image Version](https://img.shields.io/docker/v/jez500/seleniumbase-scrapper?style=flat)
 
-```bash
-docker build -f Dockerfile -t seleniumbase-api .
-```
-
-### Build with Custom SeleniumBase Version
-
-You can specify a different SeleniumBase version using the `SELENIUMBASE_VERSION` build argument:
-
-```bash
-docker build -f Dockerfile --build-arg SELENIUMBASE_VERSION=v4.44.10 -t seleniumbase-api .
-```
-
-Replace `v4.44.10` with any valid SeleniumBase git tag from the [SeleniumBase repository](https://github.com/seleniumbase/SeleniumBase).
-
-## Running the Container
-
-Start the container with the API server:
-
-```bash
-docker run -d -p 3000:3000 --name seleniumbase-api seleniumbase-api
-```
-
-The API will be automatically started and available on port 3000.
+You can find prebuilt images on Docker Hub here: https://hub.docker.com/r/jez500/seleniumbase-scrapper
 
 ## Configuration
 
@@ -55,7 +35,7 @@ docker run -d -p 3000:3000 \
   -e DEFAULT_INCOGNITO=true \
   -e DEFAULT_TIMEOUT=60000 \
   -e DEFAULT_SLEEP=1000 \
-  --name seleniumbase-api seleniumbase-api
+  --name seleniumbase-api jez500/seleniumbase-scrapper
 ```
 
 Example with custom host and port:
@@ -64,7 +44,7 @@ Example with custom host and port:
 docker run -d -p 9000:9000 \
   -e API_HOST=0.0.0.0 \
   -e API_PORT=9000 \
-  --name seleniumbase-api seleniumbase-api
+  --name seleniumbase-api jez500/seleniumbase-scrapper
 ```
 
 All available environment variables:
@@ -405,7 +385,7 @@ docker rm -f seleniumbase-api
 You can also run the container interactively while still having the API available:
 
 ```bash
-docker run -it -p 3000:3000 --name seleniumbase-api seleniumbase-api
+docker run -it -p 3000:3000 --name seleniumbase-api jez500/seleniumbase-scrapper
 ```
 
 The API server will start automatically in the background, and you'll have access to a bash shell.
@@ -431,7 +411,7 @@ ps aux | grep python
 If port 3000 is already in use, map to a different port:
 
 ```bash
-docker run -d -p 9000:3000 --name seleniumbase-api seleniumbase-api
+docker run -d -p 9000:3000 --name seleniumbase-api jez500/seleniumbase-scrapper
 curl -X GET "http://localhost:9000/api/article?url=https://example.com"
 ```
 
@@ -452,7 +432,7 @@ Tests are designed to run inside the Docker container where all dependencies are
 
 ```bash
 # Start a container with bash access
-docker run -it -p 3000:3000 --name seleniumbase-api-test seleniumbase-api bash
+docker run -it -p 3000:3000 --name seleniumbase-api-test jez500/seleniumbase-scrapper bash
 
 # Inside the container, navigate to the API directory
 cd /SeleniumBase/api
