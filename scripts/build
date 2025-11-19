@@ -1,0 +1,82 @@
+#!/bin/bash
+
+set -e
+
+VERSION_TAG="1.0"
+BASENAME="jez500/seleniumbase-scrapper"
+SUPPORTED_PLATFORMS="linux/amd64,linux/arm64"
+SELENIUMBASE_VERSION=v4.44.10
+SCRIPT_DIR="$(dirname "$0")"
+LINE="-------------------------------------------------"
+
+echo "Building..."
+echo "$LINE"
+
+push=0
+multiplatform=0
+
+for ARG in "$@"; do
+  if [ "$ARG" == 'push' ]; then
+    push=1
+  fi
+  if [ "$ARG" == 'multiplatform' ]; then
+    multiplatform=1
+  fi
+  if [ "$ARG" == 'force' ]; then
+    force=1
+  fi
+done
+
+# Confirm.
+if [ "$multiplatform" = 1 ]; then
+  echo "Multiplatform is enabled. Check the README for information on how to set up buildx."
+  echo "Normally this is done by running: 'docker buildx use multi-arch-builder'"
+  if [ "$push" = 1 ]; then
+    multiplatform_push="--push"
+  fi
+fi
+
+if [ "$push" = 1 ]; then
+  echo "Images will be pushed to Dockerhub."
+fi
+
+if [ "$force" = 1 ]; then
+  echo "No confirmation required"
+else
+  echo
+  read -p "Do you wish to continue? Y/y" -n 1 -r
+  echo
+  if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+    echo 'OK, aborting'
+    exit 1
+  fi
+fi
+
+echo "$LINE"
+echo "Starting build process"
+echo "$LINE"
+
+image_name="$BASENAME:latest"
+version_image_name="$BASENAME:$VERSION_TAG"
+image_tags="-t $image_name -t $version_image_name"
+build_flags="--build-arg SELENIUMBASE_VERSION=${SELENIUMBASE_VERSION} -f $SCRIPT_DIR/../Dockerfile ${image_tags} ."
+
+echo "Building image: $image_name with tag: $VERSION_TAG"
+
+if [ "$multiplatform" = 1 ]; then
+  echo "Building image for multiple architectures: $SUPPORTED_PLATFORMS"
+  # echo "ERROR: Chrome doesn't support arm"
+  docker buildx build ${multiplatform_push} --platform ${SUPPORTED_PLATFORMS} ${build_flags}
+else
+  echo "Building image"
+  docker build ${build_flags}
+  if [ "$push" = 1 ]; then
+    echo "$LINE"
+    echo "Pushing: $image_name and $version_image_name"
+    docker push "$image_name"
+    docker push "$version_image_name"
+  fi
+fi
+
+ echo "$LINE"
+ echo "Done"
