@@ -374,11 +374,23 @@ Tini forwards signals, so a custom command and a graceful `docker stop` both
 still work.
 
 SeleniumBase 4.44.10 also abandons one chromedriver child process per driver
-start. The article endpoint reaps that child after every scrape with
+start. It calls `driver.connect()` on a driver that already runs, which makes
+Selenium replace `Service.process` with a new `Popen` and drop the old one
+without a `wait()`. Python is that child's real parent, so Tini cannot reap it.
+The article endpoint reaps it after every scrape with
 `helpers.reap_abandoned_child_processes()`.
 
-For the full root-cause explanation and the measured results, see
-[docs/process-cleanup.md](docs/process-cleanup.md).
+Measured on `linux/amd64` with 10 scrapes of a local HTML page: zombies grew
+linearly at 12 per scrape before the fix, reaching 132. After the fix the count
+is 0 after every scrape. A 30-request run that included error paths stayed at 0.
+`docker stop` also improved, from the full 30-second timeout and exit code 137
+to under one second and exit code 143.
+
+The arm64 image was not measured. The `tini` package exists for arm64 in Ubuntu
+22.04, and the reaper does not depend on the architecture.
+
+Run `scripts/test-container-zombies` to check this yourself. See
+[Testing](#testing).
 
 ## Container Management
 
@@ -511,8 +523,14 @@ Tini, that repeated scrapes leave no zombie, that the unreachable-URL path and
 the browser start failure path leave no zombie, and that the container stops
 before the kill timeout.
 
-See [docs/process-cleanup.md](docs/process-cleanup.md) for the measured
-before-and-after numbers.
+The test is not part of CI, because it builds the image and takes several
+minutes. Run it by hand after a change to the driver lifecycle, the entrypoint
+or the base image. Running it against an older image reproduces the leak and
+fails:
+
+```bash
+./scripts/test-container-zombies jez500/seleniumbase-scrapper:v1.0 10
+```
 
 ### Test Coverage Summary
 

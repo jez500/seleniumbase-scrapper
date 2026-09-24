@@ -12,8 +12,8 @@ Process-lifecycle coverage lives in two places:
 - `test_helpers.TestReapAbandonedChildProcesses` starts a real child process,
   drops its `Popen` object, and checks that the reaper clears the zombie.
 - `../../scripts/test-container-zombies` runs real browsers in a disposable
-  container and counts zombies after every scrape. See
-  [../../docs/process-cleanup.md](../../docs/process-cleanup.md).
+  container and counts zombies after every scrape. It is not part of CI. Run it
+  by hand, as the main README explains.
 
 ## Running Tests
 
