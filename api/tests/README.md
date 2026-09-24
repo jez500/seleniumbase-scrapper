@@ -7,6 +7,14 @@ This directory contains comprehensive test coverage for the SeleniumBase API ser
 - **test_helpers.py** - Unit tests for helper functions (cache operations, parameter parsing, HTML extraction)
 - **test_endpoints.py** - Integration/feature tests for API endpoints (/health, /, /api/article)
 
+Process-lifecycle coverage lives in two places:
+
+- `test_helpers.TestReapAbandonedChildProcesses` starts a real child process,
+  drops its `Popen` object, and checks that the reaper clears the zombie.
+- `../../scripts/test-container-zombies` runs real browsers in a disposable
+  container and counts zombies after every scrape. It is not part of CI. Run it
+  by hand, as the main README explains.
+
 ## Running Tests
 
 Tests are designed to run inside the Docker container where all dependencies are available.

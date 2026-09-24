@@ -17,7 +17,8 @@ from helpers import (
     get_cache_key, get_cached_result, save_to_cache,
     parse_bool_param, parse_int_param, parse_list_param,
     extract_meta_tags, extract_article_content, 
-    extract_text_content, extract_published_time
+    extract_text_content, extract_published_time,
+    reap_abandoned_child_processes
 )
 
 logger = logging.getLogger(__name__)
@@ -239,7 +240,16 @@ def register_routes(app, cache_dir, user_scripts_dir, screenshots_dir,
             finally:
                 # Always close the driver
                 if driver:
-                    driver.quit()
+                    try:
+                        driver.quit()
+                    except Exception as e:
+                        # A failed quit must not skip the reap below
+                        logger.warning(f"driver.quit() failed: {e}")
+                # SeleniumBase abandons one chromedriver Popen object per
+                # driver start, which leaves a zombie. Reap it here, at the
+                # boundary that owns the driver. This also runs when Driver()
+                # itself failed part way through.
+                reap_abandoned_child_processes()
             
             # Parse HTML with BeautifulSoup
             soup = BeautifulSoup(html_content, 'html.parser')

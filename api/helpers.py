@@ -9,6 +9,7 @@ import re
 import json
 import time
 import logging
+import subprocess
 from pathlib import Path
 
 logger = logging.getLogger(__name__)
@@ -165,3 +166,45 @@ def extract_published_time(soup):
             return datetime_attr
     
     return None
+
+
+def reap_abandoned_child_processes():
+    """Reap child processes whose Popen object was dropped without a wait().
+
+    SeleniumBase 4.44.10 calls ``driver.connect()`` during UC-mode startup.
+    ``connect()`` calls ``Service.start()`` on a service that already runs.
+    ``Service.start()`` replaces ``Service.process`` with a new Popen object.
+    Nobody ever waits on the replaced object, so the old chromedriver stays a
+    zombie until CPython reaps it at the next Popen creation.
+
+    CPython records every dropped-but-unwaited Popen in ``subprocess._active``.
+    This function polls only those objects. It never calls ``waitpid(-1)`` and
+    it never signals a process by name, so it cannot steal a result that
+    Selenium, SeleniumBase or any other library still waits for.
+
+    Returns:
+        int: the number of child processes reaped by this call.
+    """
+    active = getattr(subprocess, '_active', None)
+    if not active:
+        return 0
+
+    reaped = 0
+    for popen in list(active):
+        try:
+            if popen.poll() is not None:
+                reaped += 1
+        except Exception as e:  # noqa: BLE001 - reaping must never raise
+            logger.debug(f"Could not poll abandoned child process: {e}")
+
+    # Drop the reaped entries from the module-level list so it cannot grow.
+    cleanup = getattr(subprocess, '_cleanup', None)
+    if callable(cleanup):
+        try:
+            cleanup()
+        except Exception as e:  # noqa: BLE001
+            logger.debug(f"subprocess._cleanup() failed: {e}")
+
+    if reaped:
+        logger.info(f"Reaped {reaped} abandoned child process(es)")
+    return reaped

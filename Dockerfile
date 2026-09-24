@@ -77,6 +77,8 @@ RUN apt-get update && apt-get install -qy --no-install-recommends \
     # Install Bash Command Line Tools
     curl \
     sudo \
+    # Init process that reaps orphaned child processes when running as PID 1
+    tini \
     unzip \
     nano \
     wget \
@@ -149,5 +151,7 @@ WORKDIR /SeleniumBase
 #============================
 EXPOSE 3000
 
-ENTRYPOINT ["/docker-entrypoint-api.sh"]
+# Tini runs as PID 1 and reaps orphaned child processes.
+# It also forwards signals to the entrypoint script.
+ENTRYPOINT ["/usr/bin/tini", "--", "/docker-entrypoint-api.sh"]
 CMD ["/bin/bash"]

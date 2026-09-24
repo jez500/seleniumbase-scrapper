@@ -249,6 +249,51 @@ class TestArticleEndpointBasics(unittest.TestCase):
         self.assertIn('detail', data)
         self.assertEqual(data['detail'][0]['type'], 'fetch_error')
 
+    @patch('endpoints.article.reap_abandoned_child_processes')
+    @patch('endpoints.article.Driver')
+    def test_article_endpoint_reaps_after_success(
+        self, mock_driver_class, mock_reap
+    ):
+        """Test that the endpoint reaps abandoned children after a scrape"""
+        mock_driver = MagicMock()
+        mock_driver_class.return_value = mock_driver
+        mock_driver.current_url = 'https://example.com'
+        mock_driver.page_source = '<html><body>Test</body></html>'
+
+        self.client.get('/api/article?url=https://example.com')
+
+        mock_reap.assert_called_once()
+
+    @patch('endpoints.article.reap_abandoned_child_processes')
+    @patch('endpoints.article.Driver')
+    def test_article_endpoint_reaps_after_driver_init_failure(
+        self, mock_driver_class, mock_reap
+    ):
+        """Test that the endpoint reaps when Driver() itself fails"""
+        mock_driver_class.side_effect = Exception("Chrome failed to start")
+
+        response = self.client.get('/api/article?url=https://example.com')
+
+        self.assertEqual(response.status_code, 500)
+        mock_reap.assert_called_once()
+
+    @patch('endpoints.article.reap_abandoned_child_processes')
+    @patch('endpoints.article.Driver')
+    def test_article_endpoint_reaps_when_quit_fails(
+        self, mock_driver_class, mock_reap
+    ):
+        """Test that a failing quit() does not skip the reap"""
+        mock_driver = MagicMock()
+        mock_driver_class.return_value = mock_driver
+        mock_driver.current_url = 'https://example.com'
+        mock_driver.page_source = '<html><body>Test</body></html>'
+        mock_driver.quit.side_effect = Exception("quit failed")
+
+        response = self.client.get('/api/article?url=https://example.com')
+
+        self.assertEqual(response.status_code, 200)
+        mock_reap.assert_called_once()
+
 
 class TestArticleEndpointParameters(unittest.TestCase):
     """Test parameter handling in /api/article endpoint"""
