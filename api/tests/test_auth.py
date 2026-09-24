@@ -25,9 +25,20 @@ class TestParseTokens(unittest.TestCase):
         """Test that an empty string produces no tokens"""
         self.assertEqual(auth.parse_tokens(''), [])
 
-    def test_whitespace_only_returns_empty_list(self):
-        """Test that a whitespace-only string produces no tokens"""
-        self.assertEqual(auth.parse_tokens('   '), [])
+    def test_whitespace_only_raises(self):
+        """Test that a set but whitespace-only value is rejected"""
+        with self.assertRaises(ValueError):
+            auth.parse_tokens('   ')
+
+    def test_commas_only_raises(self):
+        """Test that a set value with only separators is rejected"""
+        with self.assertRaises(ValueError):
+            auth.parse_tokens(',')
+
+    def test_commas_and_whitespace_only_raises(self):
+        """Test that separators and whitespace alone are rejected"""
+        with self.assertRaises(ValueError):
+            auth.parse_tokens(' , , ')
 
     def test_single_token(self):
         """Test that a single value produces one token"""

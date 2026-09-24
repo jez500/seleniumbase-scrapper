@@ -28,10 +28,21 @@ def parse_tokens(raw):
 
     Returns:
         list: one entry per non-empty token, with whitespace removed.
+
+    Raises:
+        ValueError: when the value is set but holds no token, for example
+            only whitespace or commas. Starting open in that case would
+            silently disable the authentication the operator asked for.
     """
     if not raw:
         return []
-    return [token.strip() for token in raw.split(',') if token.strip()]
+    tokens = [token.strip() for token in raw.split(',') if token.strip()]
+    if not tokens:
+        raise ValueError(
+            "API_TOKEN is set but contains no token. "
+            "Set a token, or unset API_TOKEN to run without authentication."
+        )
+    return tokens
 
 
 def _reject(error_type, message):

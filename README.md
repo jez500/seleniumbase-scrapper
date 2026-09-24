@@ -52,7 +52,7 @@ All available environment variables:
 #### Server Configuration
 - `API_HOST` (default: `0.0.0.0`) - The host/IP address the server binds to
 - `API_PORT` (default: `3000`) - The port the server listens on
-- `API_TOKEN` (default: empty) - Bearer token required on every endpoint except `/health`. Leave it empty to keep the API open. Separate several tokens with commas to rotate a token without downtime.
+- `API_TOKEN` (default: empty) - Bearer token required on every endpoint except `/health`. Leave it empty to keep the API open. Separate several tokens with commas to rotate a token without downtime. A value that holds only whitespace or commas stops the server at startup, so a broken Secret cannot silently leave the API open.
 
 #### Scraper and Browser Defaults
 - `DEFAULT_CACHE` (default: `false`)
