@@ -1,3 +1,5 @@
 .idea
 __pycache__
 api/cache
+api/downloaded_files
+api/screenshots

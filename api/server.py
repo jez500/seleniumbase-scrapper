@@ -58,8 +58,16 @@ DEFAULT_CACHE_TTL = int(os.getenv('DEFAULT_CACHE_TTL', '3600'))
 API_HOST = os.getenv('API_HOST', '0.0.0.0')
 API_PORT = int(os.getenv('API_PORT', '3000'))
 
-# Import endpoint modules
+# Bearer token authentication. Leave API_TOKEN unset to keep the API open.
+# Separate several tokens with commas to rotate a token without downtime.
+API_TOKEN = os.getenv('API_TOKEN', '')
+
+# Import the authentication module and the endpoint modules
+from auth import parse_tokens, register_auth
 from endpoints import health, root, article
+
+# Require a bearer token on every path except /health
+register_auth(app, parse_tokens(API_TOKEN))
 
 # Register all routes
 health.register_routes(app)
