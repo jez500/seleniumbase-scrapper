@@ -52,6 +52,7 @@ All available environment variables:
 #### Server Configuration
 - `API_HOST` (default: `0.0.0.0`) - The host/IP address the server binds to
 - `API_PORT` (default: `3000`) - The port the server listens on
+- `API_TOKEN` (default: empty) - Bearer token required on every endpoint except `/health`. Leave it empty to keep the API open. Separate several tokens with commas to rotate a token without downtime.
 
 #### Scraper and Browser Defaults
 - `DEFAULT_CACHE` (default: `false`)
@@ -77,6 +78,61 @@ All available environment variables:
 - `DEFAULT_TIMEZONE` (default: empty)
 - `DEFAULT_HTTP_CREDENTIALS` (default: empty)
 - `DEFAULT_EXTRA_HTTP_HEADERS` (default: empty)
+
+### Authentication
+
+The API has no authentication until you set `API_TOKEN`. An open API gives
+anyone who can reach the port a browser that fetches any URL they name, from
+inside your network. Set a token before you expose the port.
+
+```bash
+docker run -d -p 3000:3000 \
+  -e API_TOKEN=your-long-random-token \
+  --name seleniumbase-api jez500/seleniumbase-scrapper
+```
+
+Callers then send the token in an `Authorization` header:
+
+```bash
+curl -H "Authorization: Bearer your-long-random-token" \
+  "http://localhost:3000/api/article?url=https://example.com"
+```
+
+What the check does:
+
+| Path | Token required |
+|------|----------------|
+| `/api/article` | yes |
+| `/` | yes |
+| `/health` | no |
+
+`/health` stays open on purpose, so Kubernetes startup and liveness probes keep
+working without a credential.
+
+Rejected requests return HTTP 401 with a `WWW-Authenticate: Bearer` header and
+the usual error body:
+
+```json
+{"detail": [{"type": "invalid_token", "msg": "The bearer token is not valid"}]}
+```
+
+The `type` field reads `missing_token` when there is no `Authorization` header,
+`invalid_authorization_header` when the header is not `Bearer <token>`, and
+`invalid_token` when the token does not match. A rejected request never starts
+a browser.
+
+Notes:
+
+- The token must travel in the `Authorization` header. A `?token=` query
+  parameter is **not** accepted, because query strings end up in access logs
+  and browser history.
+- To rotate a token, set both values, move your clients across, then drop the
+  old one: `-e API_TOKEN=new-token,old-token`.
+- When `API_TOKEN` is empty the server logs a warning at startup, so you can
+  spot an accidentally open deployment in the container logs.
+- Generate a token with `openssl rand -hex 32`.
+- In Kubernetes, put the token in a Secret and reference it with
+  `valueFrom.secretKeyRef`. Do not put it in the manifest directly.
 
 ### User Scripts
 
@@ -344,6 +400,7 @@ curl -X GET "http://localhost:3000/api/article?url=https://www.example.com" -o o
 - **Headless Browser**: Uses Chrome in headless mode for efficient scraping
 - **JavaScript Rendering**: Fully renders JavaScript-heavy pages
 - **Undetected Mode**: Uses SeleniumBase's undetected mode to bypass bot detection
+- **Bearer Token Auth**: Optional `API_TOKEN` guards every endpoint except `/health`
 - **Error Handling**: Proper error responses with meaningful messages
 - **Auto Cleanup**: Automatically closes browser drivers after each request
 
@@ -423,6 +480,8 @@ The project includes comprehensive test coverage for the API server, covering bo
 
 - **api/tests/test_helpers.py** - Unit tests for helper functions (cache operations, parameter parsing, HTML extraction)
 - **api/tests/test_endpoints.py** - Integration tests for API endpoints (/health, /, /api/article)
+- **api/tests/test_auth.py** - Unit tests for bearer token authentication
+- **scripts/test-container-auth** - Container test that checks the token over real HTTP
 
 ### Running Tests
 
@@ -463,6 +522,24 @@ python3 -m unittest tests.test_helpers.TestCacheFunctions -v
 # Run only /health endpoint tests
 python3 -m unittest tests.test_endpoints.TestHealthEndpoint -v
 ```
+
+#### Run the Container Auth Test
+
+This test starts two real containers, one with `API_TOKEN` set and one without
+it, and calls the API over HTTP. It checks that the token is required, that
+`/health` stays open, that a rejected request starts no browser, and that an
+empty `API_TOKEN` leaves the API open with a warning in the log. It removes both
+containers on every exit path.
+
+```bash
+# Build the image first
+docker build -t seleniumbase-scrapper:test .
+
+# Run the test
+./scripts/test-container-auth seleniumbase-scrapper:test
+```
+
+The script exits 0 only when every check passes.
 
 ### Test Coverage Summary
 

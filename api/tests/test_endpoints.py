@@ -564,3 +564,110 @@ class TestArticleEndpointScreenshot(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
+
+
+class TestBearerTokenAuth(unittest.TestCase):
+    """Test that the server enforces a bearer token when one is configured"""
+
+    def setUp(self):
+        """Configure a token on the real server app"""
+        server.app.config['TESTING'] = True
+        self.client = server.app.test_client()
+        self.original_tokens = server.app.config.get('API_TOKENS')
+        server.app.config['API_TOKENS'] = ['test-token']
+
+    def tearDown(self):
+        """Restore the token list the server started with"""
+        server.app.config['API_TOKENS'] = self.original_tokens
+
+    def test_health_stays_open(self):
+        """Test that /health answers without a token"""
+        response = self.client.get('/health')
+        self.assertEqual(response.status_code, 200)
+
+    def test_root_requires_a_token(self):
+        """Test that / rejects a request with no token"""
+        response = self.client.get('/')
+        self.assertEqual(response.status_code, 401)
+
+    def test_root_accepts_the_token(self):
+        """Test that / answers with a valid token"""
+        response = self.client.get(
+            '/', headers={'Authorization': 'Bearer test-token'}
+        )
+        self.assertEqual(response.status_code, 200)
+
+    def test_article_requires_a_token(self):
+        """Test that /api/article rejects a request with no token"""
+        response = self.client.get('/api/article?url=https://example.com')
+
+        self.assertEqual(response.status_code, 401)
+        data = json.loads(response.data)
+        self.assertEqual(data['detail'][0]['type'], 'missing_token')
+
+    def test_article_rejects_a_wrong_token(self):
+        """Test that /api/article rejects a wrong token"""
+        response = self.client.get(
+            '/api/article?url=https://example.com',
+            headers={'Authorization': 'Bearer wrong'}
+        )
+
+        self.assertEqual(response.status_code, 401)
+        data = json.loads(response.data)
+        self.assertEqual(data['detail'][0]['type'], 'invalid_token')
+
+    @patch('endpoints.article.Driver')
+    def test_article_accepts_the_token(self, mock_driver_class):
+        """Test that /api/article answers with a valid token"""
+        mock_driver = MagicMock()
+        mock_driver_class.return_value = mock_driver
+        mock_driver.current_url = 'https://example.com'
+        mock_driver.page_source = '<html><head><title>T</title></head></html>'
+
+        response = self.client.get(
+            '/api/article?url=https://example.com',
+            headers={'Authorization': 'Bearer test-token'}
+        )
+
+        self.assertEqual(response.status_code, 200)
+
+    @patch('endpoints.article.Driver')
+    def test_no_driver_starts_when_the_token_is_missing(
+        self, mock_driver_class
+    ):
+        """Test that a rejected request never starts a browser"""
+        self.client.get('/api/article?url=https://example.com')
+
+        mock_driver_class.assert_not_called()
+
+
+class TestServerWithoutToken(unittest.TestCase):
+    """Test that the server stays open when no token is configured"""
+
+    def setUp(self):
+        """Clear the token list on the real server app"""
+        server.app.config['TESTING'] = True
+        self.client = server.app.test_client()
+        self.original_tokens = server.app.config.get('API_TOKENS')
+        server.app.config['API_TOKENS'] = []
+
+    def tearDown(self):
+        """Restore the token list the server started with"""
+        server.app.config['API_TOKENS'] = self.original_tokens
+
+    def test_root_answers_without_a_token(self):
+        """Test that / answers without a token when none is configured"""
+        response = self.client.get('/')
+        self.assertEqual(response.status_code, 200)
+
+    @patch('endpoints.article.Driver')
+    def test_article_answers_without_a_token(self, mock_driver_class):
+        """Test that /api/article answers without a configured token"""
+        mock_driver = MagicMock()
+        mock_driver_class.return_value = mock_driver
+        mock_driver.current_url = 'https://example.com'
+        mock_driver.page_source = '<html><head><title>T</title></head></html>'
+
+        response = self.client.get('/api/article?url=https://example.com')
+
+        self.assertEqual(response.status_code, 200)

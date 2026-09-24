@@ -6,6 +6,15 @@ This directory contains comprehensive test coverage for the SeleniumBase API ser
 
 - **test_helpers.py** - Unit tests for helper functions (cache operations, parameter parsing, HTML extraction)
 - **test_endpoints.py** - Integration/feature tests for API endpoints (/health, /, /api/article)
+- **test_auth.py** - Unit tests for bearer token authentication
+
+Authentication coverage lives in two places:
+
+- `test_auth.py` builds a small Flask app and drives it through the real
+  request path: exempt paths, a missing header, a wrong scheme, a wrong token,
+  a valid token, and several valid tokens.
+- `../../scripts/test-container-auth` runs the same checks over real HTTP
+  against two disposable containers.
 
 ## Running Tests
 

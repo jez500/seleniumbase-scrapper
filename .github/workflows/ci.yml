@@ -18,9 +18,23 @@ jobs:
         run: |
           ./scripts/run-tests
 
+  auth_container_test:
+    runs-on: ubuntu-latest
+    steps:
+      -
+        uses: actions/checkout@v4
+      -
+        name: Build the image for the current architecture
+        run: |
+          docker build -t seleniumbase-scrapper:ci .
+      -
+        name: Run the container auth test
+        run: |
+          ./scripts/test-container-auth seleniumbase-scrapper:ci
+
   docker_build_push:
     if: startsWith(github.ref, 'refs/tags/v')
-    needs: tests
+    needs: [tests, auth_container_test]
     runs-on: ubuntu-latest
     steps:
       -
