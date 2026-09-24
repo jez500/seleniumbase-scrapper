@@ -12,6 +12,9 @@ from unittest.mock import patch, MagicMock
 from bs4 import BeautifulSoup
 import sys
 import os
+import gc
+import subprocess
+import warnings
 
 # Add parent directory to path to import helpers
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -538,3 +541,66 @@ class TestExtractPublishedTime(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
+
+
+class TestReapAbandonedChildProcesses(unittest.TestCase):
+    """Test the reaper for child processes whose Popen object was dropped"""
+
+    @staticmethod
+    def _process_state(pid):
+        """Return the single-letter process state, or None if the pid is gone"""
+        try:
+            with open(f"/proc/{pid}/stat") as stat_file:
+                stat = stat_file.read()
+        except OSError:
+            return None
+        return stat[stat.rfind(')') + 2:].split()[0]
+
+    def test_returns_zero_when_nothing_is_pending(self):
+        """Test that the reaper returns 0 when no child process is pending"""
+        # Drain anything an earlier test left behind
+        helpers.reap_abandoned_child_processes()
+        self.assertEqual(helpers.reap_abandoned_child_processes(), 0)
+
+    def test_returns_zero_when_active_list_is_missing(self):
+        """Test that the reaper tolerates a subprocess module without _active"""
+        with patch.object(helpers.subprocess, '_active', None):
+            self.assertEqual(helpers.reap_abandoned_child_processes(), 0)
+
+    def test_does_not_touch_a_tracked_running_child(self):
+        """Test that the reaper leaves a child the caller still owns alone"""
+        proc = subprocess.Popen(['sleep', '5'])
+        try:
+            self.assertEqual(helpers.reap_abandoned_child_processes(), 0)
+            self.assertIsNone(proc.poll())
+        finally:
+            proc.kill()
+            proc.wait()
+
+    @unittest.skipUnless(sys.platform.startswith('linux'), 'needs /proc')
+    def test_reaps_a_dropped_child_process(self):
+        """Test that the reaper clears a zombie left by a dropped Popen"""
+        helpers.reap_abandoned_child_processes()
+
+        proc = subprocess.Popen(['sleep', '0.2'])
+        pid = proc.pid
+        # Drop the reference while the child still runs. CPython then records
+        # the object in subprocess._active instead of reaping the child.
+        with warnings.catch_warnings():
+            warnings.simplefilter('ignore', ResourceWarning)
+            del proc
+            gc.collect()
+        self.assertIn(pid, [p.pid for p in subprocess._active])
+
+        # Wait for the child to exit and become a zombie.
+        deadline = time.time() + 5
+        while time.time() < deadline:
+            if self._process_state(pid) == 'Z':
+                break
+            time.sleep(0.05)
+        self.assertEqual(self._process_state(pid), 'Z')
+
+        reaped = helpers.reap_abandoned_child_processes()
+
+        self.assertGreaterEqual(reaped, 1)
+        self.assertNotEqual(self._process_state(pid), 'Z')

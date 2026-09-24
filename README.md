@@ -346,6 +346,7 @@ curl -X GET "http://localhost:3000/api/article?url=https://www.example.com" -o o
 - **Undetected Mode**: Uses SeleniumBase's undetected mode to bypass bot detection
 - **Error Handling**: Proper error responses with meaningful messages
 - **Auto Cleanup**: Automatically closes browser drivers after each request
+- **Process Cleanup**: Tini runs as PID 1 and reaps orphaned browser processes
 
 ## Technical Details
 
@@ -353,6 +354,31 @@ curl -X GET "http://localhost:3000/api/article?url=https://www.example.com" -o o
 - **Browser**: Chrome (headless)
 - **Port**: 3000
 - **SeleniumBase Driver**: UC mode enabled for better compatibility
+- **Init process**: Tini
+
+### Process Cleanup
+
+Chrome starts many descendant processes. Some of them outlive their parent and
+get reparented to PID 1. PID 1 must reap them, or they stay in the process
+table as zombies until the container runs out of PIDs.
+
+The image therefore runs Tini as PID 1:
+
+```
+ENTRYPOINT ["/usr/bin/tini", "--", "/docker-entrypoint-api.sh"]
+```
+
+You do **not** need `docker run --init` or Compose `init: true`. Kubernetes
+gets the same reaping behaviour, because the init process is part of the image.
+Tini forwards signals, so a custom command and a graceful `docker stop` both
+still work.
+
+SeleniumBase 4.44.10 also abandons one chromedriver child process per driver
+start. The article endpoint reaps that child after every scrape with
+`helpers.reap_abandoned_child_processes()`.
+
+For the full root-cause explanation and the measured results, see
+[docs/process-cleanup.md](docs/process-cleanup.md).
 
 ## Container Management
 
@@ -421,8 +447,9 @@ The project includes comprehensive test coverage for the API server, covering bo
 
 ### Test Structure
 
-- **api/tests/test_helpers.py** - Unit tests for helper functions (cache operations, parameter parsing, HTML extraction)
+- **api/tests/test_helpers.py** - Unit tests for helper functions (cache operations, parameter parsing, HTML extraction, child-process reaping)
 - **api/tests/test_endpoints.py** - Integration tests for API endpoints (/health, /, /api/article)
+- **scripts/test-container-zombies** - Container regression test that scrapes with a real browser and counts zombie processes
 
 ### Running Tests
 
@@ -463,6 +490,29 @@ python3 -m unittest tests.test_helpers.TestCacheFunctions -v
 # Run only /health endpoint tests
 python3 -m unittest tests.test_endpoints.TestHealthEndpoint -v
 ```
+
+#### Run the Container Regression Test
+
+This test starts a real container, scrapes a local HTML page many times with a
+real browser, and counts zombie processes inside the container after every
+scrape. It never reaches an external website. It removes the test container on
+every exit path.
+
+```bash
+# Build the image first
+docker build -t seleniumbase-scrapper:test .
+
+# Run the test. The second argument is the number of scrapes (default 10).
+./scripts/test-container-zombies seleniumbase-scrapper:test 10
+```
+
+The script exits 0 only when every check passes. It checks that PID 1 runs
+Tini, that repeated scrapes leave no zombie, that the unreachable-URL path and
+the browser start failure path leave no zombie, and that the container stops
+before the kill timeout.
+
+See [docs/process-cleanup.md](docs/process-cleanup.md) for the measured
+before-and-after numbers.
 
 ### Test Coverage Summary
 
