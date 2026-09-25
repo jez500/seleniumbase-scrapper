@@ -17,10 +17,18 @@ ARG TARGETARCH
 RUN echo "Building for Arch $TARGETARCH"
 
 #============================
+# Retry apt downloads and installs
+#============================
+# An Ubuntu mirror can be part way through a sync during a build. Retry
+# failed downloads, and retry an install after a fresh "apt-get update".
+RUN echo 'Acquire::Retries "5";' > /etc/apt/apt.conf.d/80-retries
+COPY scripts/apt-get-retry /usr/local/bin/apt-get-retry
+
+#============================
 # Locale Configuration
 #============================
 RUN apt-get update && \
-    apt-get install -y --no-install-recommends tzdata locales && \
+    apt-get-retry install -y --no-install-recommends tzdata locales && \
      # Cleanup
      apt-get clean && \
      rm -rf /var/lib/apt/lists/*
@@ -39,7 +47,7 @@ RUN locale-gen en_US.UTF-8
 #============================
 # Install dependencies
 #============================
-RUN apt-get update && apt-get install -qy --no-install-recommends \
+RUN apt-get update && apt-get-retry install -qy --no-install-recommends \
     # Install Linux Dependencies
     libasound2 \
     libatk-bridge2.0-0 \
@@ -92,17 +100,17 @@ RUN apt-get update && apt-get install -qy --no-install-recommends \
 #============================
 RUN apt-get update && \
     if [ "$TARGETARCH" = "arm64" ]; then \
-        apt-get install -y chromium-browser chromium-chromedriver; \
+        apt-get-retry install -y chromium-browser chromium-chromedriver; \
     else \
         wget https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb && \
-        apt-get install -y ./google-chrome-stable_current_amd64.deb && \
+        apt-get-retry install -y ./google-chrome-stable_current_amd64.deb && \
         rm ./google-chrome-stable_current_amd64.deb; \
     fi && \
     # Python.
-    apt-get install -y python3 python3-pip python3-setuptools python3-dev python3-tk && \
+    apt-get-retry install -y python3 python3-pip python3-setuptools python3-dev python3-tk && \
     alias python=python3 && \
     echo "alias python=python3" >> ~/.bashrc && \
-    apt-get -qy --no-install-recommends install python3.10 && \
+    apt-get-retry -qy --no-install-recommends install python3.10 && \
     rm /usr/bin/python3 && \
     ln -s python3.10 /usr/bin/python3 && \
     # Cleanup
