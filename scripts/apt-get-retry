@@ -1,0 +1,33 @@
+#!/bin/bash
+# Run apt-get with the given arguments, and retry when it fails.
+#
+# An Ubuntu mirror can be part way through a sync while the image builds. The
+# package index then lists a new version of one package and an old version of a
+# package that depends on it, and "apt-get install" fails with unmet
+# dependencies. Waiting and running "apt-get update" again usually fixes it.
+#
+# Usage: apt-get-retry install -y <package>...
+#
+# Environment:
+#   APT_RETRY_ATTEMPTS  number of attempts (default 3)
+#   APT_RETRY_DELAY     seconds to wait between attempts (default 60)
+
+set -u
+
+attempts="${APT_RETRY_ATTEMPTS:-3}"
+delay="${APT_RETRY_DELAY:-60}"
+
+for attempt in $(seq 1 "$attempts"); do
+    if apt-get "$@"; then
+        exit 0
+    fi
+    if [ "$attempt" -eq "$attempts" ]; then
+        break
+    fi
+    echo "apt-get $* failed (attempt $attempt of $attempts). Retrying in ${delay}s." >&2
+    sleep "$delay"
+    apt-get update || true
+done
+
+echo "apt-get $* failed after $attempts attempts." >&2
+exit 1

@@ -599,6 +599,10 @@ it, and calls the API over HTTP. It checks that the token is required, that
 empty `API_TOKEN` leaves the API open with a warning in the log. It removes both
 containers on every exit path.
 
+The test is not part of CI, because it builds the image and takes several
+minutes. CI runs the auth unit tests in `test_auth.py` and `test_endpoints.py`.
+Run this test by hand after a change to the auth code or the entrypoint.
+
 ```bash
 # Build the image first
 docker build -t seleniumbase-scrapper:test .
